@@ -1,0 +1,176 @@
+Invoice Vendor Payment Deployment (DRAFT)
+
+This document is a DRAFT and is subject to change based on software releases to the
+SAP-Concur core product and APIs.
+
+Cashflow Optimization App Integration (Invoice Vendor Payment)
+
+The Cash Flow Optimization app category has been designed to enable an App Center Partner to pay our mutual customer's chosen invoices via
+the Partner's payment technology. The deployment of this integration between Concur and the App Center Partner involves a concise set of API
+resources and a thorough consultation with the customer. The consultation is required to ensure the customer and Partner understand how the
+various invoice payment methods affect accounting processes in their ERP system. For example, the customer could pay SAP-Concur invoices
+via these methods:
+
+* Their own Accounts Payable process
+* The SAP-Concur Invoice Payment ACH service
+* Partner integration (described below)
+
+The consultation call(s) with the client should include the following series of questions to ensure the customer understands how to manage the
+data in the Payment Request Accounting Extract (PRAE) file and the data returned from the Partner. Note: If the client does not use the PRAE
+file, the same considerations should be given to the data obtained for an ERP integration that does not use a file (i.e. Concur's Financial Posting
+Service that does not use a file).
+
+The PRAE file will contain all Invoice data, including Invoices that are to be paid by the Partner. Therefore, the customer needs to be aware of
+those lines in the PRAE to avoid duplicate or confusing Journal Entries since they will likely get payment accounting data from the Partner after
+payment has been made.
+
+Invoices that will be paid by the Partner:
+These invoices are marked as, ‘PAYPVD’, in the Vendor Payment Method field of the PRAE file (or financial data if not using a file for
+their ERP integration).
+
+PAYPVD is the code that corresponds to “Payment Provider”
+
+This questionnaire will help the customer and the Partner determine how the customer will manage the PAYPVD invoices.
+
+Will the client create accrual Journal Entries in their ERP before processing the data returned to them by the Partner?
+
+If yes, then any data from the Partner (after payment has been made) should be used by the customer to create the necessary
+adjusting JE’s against the accrual.
+
+See Appendix-II that lists the data that the Partner receives from Concur.
+This assumes the customer has integrated the PRAE file into the ERP before integrating the data from the Partner.
+
+Net new Concur Invoice clients:
+Using this approach, the customer will journalize ALL of the data in the PRAE file, including the Invoices marked
+as PAYPD before managing the data returned from the Partner.
+
+Existing Concur Invoice customers: these customers will need to examine their current integration process to
+determine what needs adjusted in their existing process to avoid confusion related to the invoices paid by the Vendor.
+The Partner must have these consultative questions with the customer.
+
+The data back from the Partner should serve as a payment confirmation.
+
+*The Payment Confirmation Import file process can be conducted by the client if desired. In the future, the Partner may
+be able to do this via future APIs, but currently, the only way to get a “confirmed” status into Concur is via the import file.
+The client may not need this in Concur Invoice since they will have confirmed data in their ERP. 
+
+Will the customer create their initial Journal Entries after the Payment has been made by the Partner? i.e. no accrual. One set
+of JE’s based on the data received from the Partner?
+
+If yes, the customer should review the data that they receive from the Partner to ensure they have the necessary data.
+See Appendix-II that lists the data the Partner receives from Concur.
+
+Using this approach, the customer will have excluded the PAYPVD entries from their PRAE file so they are not processed with
+the other invoices that are not being paid by the Partner.
+
+The customer needs to be aware of the Invoice data that is present in their PRAE file (or financial data if not using a file
+ERP integration). The customer will need to determine the entries marked as PAYPVD (Payment Provider) and exclude
+them from the PRAE file prior to the integration into their ERP. E.g. will they book the invoice and payment of the
+PAYPVD invoice at the same time based on the data from the Partner's app.
+
+Net new Concur Invoice customers: Does their integration plan exclude the invoices marked in the Vendor Payment Method field, 'PAYPD'?
+Existing Concur Invoice customers: they will need to examine their current integration process to determine what
+needs adjusted to avoid confusion related to the invoices paid by the Vendor. (the Partner must have these consultative
+questions with the client).
+
+*The Payment Confirmation Import file process can be conducted by the client if desired. In the future, the Partner may be able
+to do this via future APIs, but currently, the only way to get a “confirmed” status into Concur is via the import file. The client may
+not need this in Concur Invoice since they will have confirmed data in their ERP. This is only support for Pro Edition.
+
+APIs involved & the Partner's Landing Page development (subject to change):
+Authentication - (required) - see: https://prezi.com/p/lw0qqy51zcmd/ and the Developer Portal
+Payment Requests (required) - see Step #10 below
+The process essentially involves getting a list of invoices that need paid by you (the Partner). That API response will provide a
+list of those invoices, each having a unique Payment Request ID. To obtain the details for each invoice you will make a distinct
+API request per Payment Request ID with a slightly different API.
+
+API Calls Summary:
+GET	https://us.api.concursolutions.com/oauth2/v0/authorize
+POST	https://us.api.concursolutions.com/oauth2/v0/token
+GET	https://us.api.concursolutions.com/profile/v1/me
+GET	https://www.concursolutions.com/api/v3.0/invoice/paymentrequestdigests
+GET	https://www.concursolutions.com/api/v3.0/invoice/paymentrequest
+GET	https://www.concursolutions.com/api/v3.0/invoice/vendors
+GET	https://www.concursolutions.com/api/image/v1.0/invoice
+
+API Calls Details:
+Once the customer's Concur site has processed the Payment Requests (aka approved Invoices) on a nightly schedule, the Partner can focus
+on those Payment Requests approved for that day. (these are final-approved invoices that cannot be edited inside of Concur any longer,
+so that you will not have any variances).
+
+Payment Request Digests (i.e. a list of approved invoices):
+Use the following Parameters to filter by Payment Method Type and Extracted Date together in one API request.
+
+Payment Method Type:
+Vendor Master records that will be paid by the Partner will be marked with "PAYPVD" in the Payment Method field. (code for Payment Provider). Also refer to Step #7 above. Parameter to use for the GET Payment Digests: payMethodType=PAYPVD
+Extracted Date: 
+Search for a single day at a time to coincide with the nightly extract process. This will provide only those invoices that were marked with "PAYPVD" as the Payment Type and that were final-approved through the Concur workflow on the specified date. For example, all PAYPVD invoices extracted on April 7th, 2018 would have the following parameters:
+extractedDateBefore - The payment request extracted date is before this date. Format: 2018-04-08
+extractedDateAfter - The payment request extracted date is after this date. Format: 2018-04-06
+
+See documentation:
+https://developer.concur.com/api-reference/invoice/payment-request-digest.html
+https://developer.concur.com/api-explorer/v3-0/PaymentRequestDigest.html
+Payment Request Details (details of an individual invoice, one-by-one):
+
+For each ID returned from the first request, make a distinct API request per Payment Request ID: 
+GET /api/v3.0/invoice/paymentrequest/{id}
+
+See Documentation:
+https://developer.concur.com/api-reference/invoice/payment-request.html
+https://developer.concur.com/api-explorer/v3-0/PaymentRequest.html
+
+Vendors
+The Payment Provider retrieves Vendors:
+GET /api/v3.0/invoice/vendors
+
+See Documentation:
+https://developer.concur.com/api-reference/invoice/vendor.html
+https://developer.concur.com/api-explorer/v3-0/Vendors.html
+
+Invoice Images
+The Image resource represents a receipt image or an invoice image.  Documentation:
+https://developer.concur.com/api-reference-deprecated/version-one/Image/image-resource.html
+ 
+Step 1: GET the Payment Request ID (using appropriate query components):
+https://www.concursolutions.com/api/v3.0/invoice/paymentrequestdigests?vendorInvoiceNumber=T1
+ 
+<PaymentRequestDigests xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <Items />
+    <NextPage xsi:nil="true" />
+    <PaymentRequestDigest>
+        <ID>147CC753E2A943EC9EB3</ID>
+        <URI>https://www.concursolutions.com/api/v3.0/invoice/PaymentRequestDigests/147CC753E2A943EC9EB3</URI>
+        <PaymentRequestId>147CC753E2A943EC9EB3</PaymentRequestId>
+  <PaymentRequestUri>https://www.concursolutions.com/api/v3.0/invoice/PaymentRequest/147CC753E2A943EC9EB3</PaymentRequestUri>
+        <ApprovalStatusCode>R_APPR</ApprovalStatusCode>
+        <PaymentStatusCode>R_PROC</PaymentStatusCode>
+       <VendorCode>1291BOST001</VendorCode>
+        <VendorName>1291 Boston Post Road LLC</VendorName>
+        <InvoiceNumber>T1</InvoiceNumber>
+        <CreateDate>2017-12-29 17:45:17.0</CreateDate>
+        <UserDefinedDate>2017-12-29 00:00:00.0</UserDefinedDate>
+        <Total>100.00000000</Total>
+        <CurrencyCode>USD</CurrencyCode>
+        <OwnerLoginID>user@despain-connect.com</OwnerLoginID>
+        <OwnerName>user user</OwnerName>
+        <IsDeleted>false</IsDeleted>
+        <PaymentMethod>ACH</PaymentMethod>
+        <LastModifiedDate>2017-12-29 17:53:48.0</LastModifiedDate>
+        <ExtractedDate>2017-12-29 17:53:21.0</ExtractedDate>
+    </PaymentRequestDigest>
+    <TotalCount>1</TotalCount>
+</PaymentRequestDigests>
+ 
+Step 2: Then use this GET URI:
+https://www.concursolutions.com/api/image/v1.0/invoice/147CC753E2A943EC9EB3
+Response:
+ 
+<Image xmlns="http://www.concursolutions.com/api/image/2011/02" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+    <Id>147CC753E2A943EC9EB3</Id>
+    <Url>https://imagingupload.concursolutions.com/file/p0015805vtgz/62D296F294B7D7022E11F68CD9017D3BE0BB08BEAB1BCEB2D3FF346B6660BD5686C484A40A28467E19EE239C5A28BE3F628F446EF1FAC377EB74E71FE6A685BBH3DA832DFABDDFBB76BF7BAFF53B48192?id=147CC753E2A943EC9EB3&amp;e=p0015805vtgz&amp;t=AN</Url>
+</Image>
+
+Copy/Paste the URL into a browser session to render the image.  Note: This is a temp URL that is only persists for 15 minutes.
+https://imagingupload.concursolutions.com/file/p0015805vtgz/62D296F294B7D7022E11F68CD9017D3BE0BB08BEAB1BCEB2D3FF346B6660BD5686C484A40A28467E19EE239C5A28BE3F628F446EF1FAC377EB74E71FE6A685BBH3DA832DFABDDFBB76BF7BAFF53B48192
+ 
